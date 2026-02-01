@@ -20,8 +20,22 @@ The `c_nonce` lifecycle is managed entirely within `OpenId4VciManager` in the `e
 The nonce is also passed to the attestation provider for key attestation binding:
 
 ```kotlin
-// WalletCoreAttestationProvider
-suspend fun getKeyAttestation(keys: List<Key>, nonce: String): String
+// File: core-logic/src/main/java/eu/europa/ec/corelogic/provider/WalletCoreAttestationProvider.kt
+
+class WalletCoreAttestationProviderImpl(
+    private val walletCoreConfig: WalletCoreConfig,
+    private val walletAttestationRepository: WalletAttestationRepository
+) : WalletCoreAttestationProvider {
+
+    override suspend fun getKeyAttestation(
+        keys: List<KeyInfo>,
+        nonce: Nonce?
+    ): Result<String> = walletAttestationRepository.getKeyAttestation(
+        baseUrl = walletCoreConfig.walletProviderHost,
+        keys = keys.map { it.publicKey.toJwk() },
+        nonce = nonce?.value
+    )
+}
 ```
 
 The `nonce` parameter in `getKeyAttestation` is the `c_nonce` from the token response. This binds the key attestation to the specific issuance session, preventing an attacker from using a pre-generated key attestation with a different session's nonce.
@@ -33,21 +47,25 @@ TxCode validation occurs in `DocumentOfferInteractor` and `DocumentOfferCodeView
 **Input mode restriction:** The EUDI Android wallet accepts only `numeric` input mode. If the credential offer specifies `text` mode for the TxCode, the wallet rejects it:
 
 ```kotlin
-// DocumentOfferInteractor -- simplified
-fun validateTxCode(txCodeSpec: TxCodeSpec): ValidationResult {
-    if (txCodeSpec.inputMode != InputMode.NUMERIC) {
-        return ValidationResult.UnsupportedInputMode
+// File: issuance-feature/src/main/java/eu/europa/ec/issuancefeature/interactor/DocumentOfferInteractor.kt
+
+val codeMinLength = 4
+val codeMaxLength = 6
+
+safeLet(
+    response.offer.txCodeSpec?.inputMode,
+    response.offer.txCodeSpec?.length
+) { inputMode, length ->
+
+    if ((length !in codeMinLength..codeMaxLength) || inputMode == TxCodeInputMode.TEXT) {
+        return@map ResolveDocumentOfferInteractorPartialState.Failure(
+            errorMessage = resourceProvider.getString(
+                R.string.issuance_document_offer_error_invalid_txcode_format,
+                codeMinLength,
+                codeMaxLength
+            )
+        )
     }
-    // ...
-}
-```
-
-**Length validation:** The wallet enforces exact length matching. If the TxCode specification declares a `length` of 6, the user must enter exactly 6 digits:
-
-```kotlin
-// DocumentOfferCodeViewModel -- simplified
-fun validateInput(code: String, expectedLength: Int): Boolean {
-    return code.length == expectedLength && code.all { it.isDigit() }
 }
 ```
 
@@ -81,23 +99,17 @@ TxCode validation occurs in `OfferCodeViewModel`.
 **Debounced input:** The iOS wallet debounces TxCode input with a 250ms delay. This prevents rapid validation cycles as the user types:
 
 ```swift
-// OfferCodeViewModel -- conceptual
-$codeInput
-    .debounce(for: .milliseconds(250), scheduler: RunLoop.main)
-    .sink { [weak self] code in
-        self?.validateCode(code)
-    }
-```
+// File: Modules/feature-issuance/Sources/Interactor/DocumentOfferInteractor.swift
 
-**Input mode restriction:** Like Android, the iOS wallet rejects non-numeric TxCode input modes:
+let codeMinLength = 4
+let codeMaxLength = 6
 
-```swift
-// OfferCodeViewModel -- simplified
-func validateTxCode(_ spec: TxCodeSpec) -> Bool {
-    guard spec.inputMode == .numeric else {
-        return false // TEXT mode not supported
-    }
-    return true
+let offer = try await walletController.resolveOfferUrlDocTypes(offerUri: uri)
+
+if let spec = offer.txCodeSpec,
+   let codeLength = spec.length,
+   !(codeMinLength...codeMaxLength).contains(codeLength) || spec.inputMode == .text {
+  return .failure(WalletCoreError.transactionCodeFormat(["\(codeMinLength)", "\(codeMaxLength)"]))
 }
 ```
 
@@ -124,17 +136,20 @@ TxCode input is handled in `credential-confirmation-code-screen.tsx`.
 **Input mode support:** Unlike the EUDI wallets, Procivis ONE supports both `NUMERIC` and `TEXT` input modes:
 
 ```typescript
-// credential-confirmation-code-screen.tsx -- simplified
-import { OpenId4vciTxCodeInputModeBindingEnum } from '@procivis/react-native-one-core';
+// File: app/screens/credential/credential-confirmation-code-screen.tsx
 
-const renderInput = (inputMode: OpenId4vciTxCodeInputModeBindingEnum) => {
-  switch (inputMode) {
-    case OpenId4vciTxCodeInputModeBindingEnum.NUMERIC:
-      return <CodeInput keyboardType="numeric" />;
-    case OpenId4vciTxCodeInputModeBindingEnum.TEXT:
-      return <CodeInput keyboardType="default" />;
-  }
-};
+const {
+    invalidCode,
+    invitationResult: { txCode: optionalTxCode, keyStorageSecurityLevels = [] },
+  } = route.params;
+  const txCode = optionalTxCode!;
+  const [code, setCode] = useState<string | undefined>(invalidCode);
+  const isInputLengthValid = code && code.length === txCode.length;
+  const isInvalid = invalidCode && code === invalidCode;
+  const isNumericInput =
+    txCode.inputMode === OpenId4vciTxCodeInputModeBindingEnum.NUMERIC;
+  const keyboardType = isNumericInput ? 'number-pad' : 'default';
+  const submitBtnDisabled = Boolean(!code || !isInputLengthValid);
 ```
 
 The `OpenId4vciTxCodeInputModeBindingEnum` maps directly to the OID4VCI specification's `input_mode` values:
@@ -156,17 +171,24 @@ These error codes are returned by the core engine and displayed to the user with
 **Security level check:** Before proceeding with issuance after TxCode validation, Procivis ONE checks the required security level. If the credential requires RSE (Remote Secure Element) key storage, the RSE setup flow is triggered before the credential request:
 
 ```typescript
-// Simplified flow
-const handleCodeSubmit = async (code: string) => {
-  const result = await submitTxCode(code);
+// File: app/screens/credential/credential-confirmation-code-screen.tsx
 
-  if (result.requiredSecurityLevel === KeyStorageSecurityBindingEnum.HIGH) {
-    // Trigger RSE setup before credential request
-    await setupRSE();
-  }
+const handleSubmit = useCallback(() => {
+    const needsRSESetup =
+      keyStorageSecurityLevels?.includes(KeyStorageSecurityBindingEnum.HIGH) &&
+      !walletStore.isRSESetup;
 
-  await requestCredential();
-};
+    navigation.replace(needsRSESetup ? 'RSEInfo' : 'CredentialOffer', {
+      invitationResult: route.params.invitationResult,
+      txCode: code,
+    });
+  }, [
+    code,
+    navigation,
+    route.params.invitationResult,
+    keyStorageSecurityLevels,
+    walletStore.isRSESetup,
+  ]);
 ```
 
 ---

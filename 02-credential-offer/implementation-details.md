@@ -24,6 +24,89 @@ DocumentOfferViewModel
 
 The SDK-level `OpenId4VciManager.resolveCredentialOffer()` handles the OID4VCI protocol mechanics: parsing the URI, extracting the `credential_offer` or `credential_offer_uri` parameter, fetching the offer object if necessary, and resolving the issuer's metadata.
 
+The core offer resolution, PID validation, and TxCode validation logic:
+
+```kotlin
+// File: issuance-feature/src/main/java/eu/europa/ec/issuancefeature/interactor/DocumentOfferInteractor.kt
+
+override fun resolveDocumentOffer(offerUri: String): Flow<ResolveDocumentOfferInteractorPartialState> =
+    flow {
+        val userLocale = resourceProvider.getLocale()
+        walletCoreDocumentsController.resolveDocumentOffer(
+            offerUri = offerUri
+        ).map { response ->
+            when (response) {
+                is ResolveDocumentOfferPartialState.Failure -> {
+                    ResolveDocumentOfferInteractorPartialState.Failure(errorMessage = response.errorMessage)
+                }
+
+                is ResolveDocumentOfferPartialState.Success -> {
+
+                    credentialOffers[offerUri] = response.offer
+
+                    val offerHasNoDocuments = response.offer.offeredDocuments.isEmpty()
+                    if (offerHasNoDocuments) {
+                        ResolveDocumentOfferInteractorPartialState.NoDocument(
+                            issuerName = response.offer.getIssuerName(userLocale),
+                            issuerLogo = response.offer.getIssuerLogo(userLocale),
+                        )
+                    } else {
+
+                        val codeMinLength = 4
+                        val codeMaxLength = 6
+
+                        safeLet(
+                            response.offer.txCodeSpec?.inputMode,
+                            response.offer.txCodeSpec?.length
+                        ) { inputMode, length ->
+
+                            if ((length !in codeMinLength..codeMaxLength) || inputMode == TxCodeInputMode.TEXT) {
+                                return@map ResolveDocumentOfferInteractorPartialState.Failure(
+                                    errorMessage = resourceProvider.getString(
+                                        R.string.issuance_document_offer_error_invalid_txcode_format,
+                                        codeMinLength,
+                                        codeMaxLength
+                                    )
+                                )
+                            }
+                        }
+
+                        val hasMainPid =
+                            walletCoreDocumentsController.getMainPidDocument() != null
+
+                        val hasPidInOffer =
+                            response.offer.offeredDocuments.any { offeredDocument ->
+                                val id = offeredDocument.documentIdentifier
+                                id == DocumentIdentifier.MdocPid || id == DocumentIdentifier.SdJwtPid
+                            }
+
+                        if (hasMainPid || hasPidInOffer) {
+                            ResolveDocumentOfferInteractorPartialState.Success(
+                                documents = response.offer.offeredDocuments.map { offeredDocument ->
+                                    DocumentOfferUi(
+                                        title = offeredDocument.getName(userLocale).orEmpty(),
+                                    )
+                                },
+                                issuerName = response.offer.getIssuerName(userLocale),
+                                issuerLogo = response.offer.getIssuerLogo(userLocale),
+                                txCodeLength = response.offer.txCodeSpec?.length
+                            )
+                        } else {
+                            ResolveDocumentOfferInteractorPartialState.Failure(
+                                errorMessage = resourceProvider.getString(
+                                    R.string.issuance_document_offer_error_missing_pid_text
+                                )
+                            )
+                        }
+                    }
+                }
+            }
+        }.collect {
+            emit(it)
+        }
+    }
+```
+
 The resolved offer is returned as a domain object containing:
 - The list of offered credential types (mapped to `OfferedDocumentDomain`)
 - The issuer's display metadata (name, logo)
@@ -94,6 +177,50 @@ DocumentOfferInteractor
 ```
 
 The resolved offer returns the same domain information as the Android implementation: offered document types, issuer display metadata, and TxCode requirements.
+
+The core offer resolution, PID validation, and TxCode validation logic in Swift:
+
+```swift
+// File: Modules/feature-issuance/Sources/Interactor/DocumentOfferInteractor.swift
+
+func processOfferRequest(with uri: String) async -> OfferRequestPartialState {
+    do {
+
+      let codeMinLength = 4
+      let codeMaxLength = 6
+
+      let offer = try await walletController.resolveOfferUrlDocTypes(offerUri: uri)
+      let hasPidStored = await !walletController.fetchIssuedDocuments(with: [.mDocPid, .sdJwtPid]).isEmpty
+
+      if let spec = offer.txCodeSpec,
+         let codeLength = spec.length,
+         !(codeMinLength...codeMaxLength).contains(codeLength) || spec.inputMode == .text {
+        return .failure(WalletCoreError.transactionCodeFormat(["\(codeMinLength)", "\(codeMaxLength)"]))
+      }
+
+      let hasPidInOffer = offer.docModels.first(
+        where: { offer in
+          let identifier = DocumentTypeIdentifier(
+            rawValue: offer.docType.ifNilOrEmpty {
+              offer.vct.ifNilOrEmpty {
+                offer.credentialConfigurationIdentifier
+              }
+            }
+          )
+          return identifier == .mDocPid || identifier == .sdJwtPid
+        }
+      ) != nil
+
+      if !hasPidStored && !hasPidInOffer {
+        return .failure(WalletCoreError.missingPid)
+      }
+
+      return .success(offer.transformToDocumentOfferUi())
+    } catch {
+      return .failure(error)
+    }
+  }
+```
 
 ### URI Scheme Registration
 
@@ -173,6 +300,108 @@ const finalUrl = response.info().redirects?.pop() || url;
 ```
 
 This is important because credential offer URLs are often short URLs or redirect-based URLs that resolve to the full `openid-credential-offer://` URI.
+
+The actual redirect resolution and invitation handling logic:
+
+```typescript
+// File: app/screens/credential/invitation-process-screen.tsx
+
+useEffect(() => {
+    if (
+      !canHandleInvitation ||
+      !availableTransport ||
+      redirectState === 'redirecting'
+    ) {
+      return;
+    }
+
+    if (!redirectState && isValidHttpUrl(invitationUrl)) {
+      setRedirectState('redirecting');
+      RNBlobUtil.config({ followRedirect: false })
+        .fetch('GET', invitationUrl)
+        .then((response) => {
+          setRedirectState('done');
+          if (response.respInfo.redirects.length === 0) {
+            setRedirectState('done');
+            return;
+          }
+          const headers =
+            typeof response.respInfo.headers === 'object'
+              ? (response.respInfo.headers as Record<any, any>)
+              : undefined;
+          const redirectUrl =
+            headers && typeof headers === 'object' && 'Location' in headers
+              ? (headers['Location'] as string)
+              : undefined;
+          if (!redirectUrl) {
+            setRedirectState('done');
+            return;
+          }
+          const newInvitationUrl =
+            parseUniversalLink(redirectUrl) ?? redirectUrl;
+          if (
+            newInvitationUrl &&
+            !isValidHttpUrl(newInvitationUrl) &&
+            newInvitationUrl !== invitationUrl
+          ) {
+            setInvitationSupportedTransports(
+              getInvitationUrlTransports(
+                newInvitationUrl,
+                config.customOpenIdUrlScheme,
+              ),
+            );
+            setInvitationUrl(newInvitationUrl);
+          }
+          setRedirectState('done');
+        })
+        .catch(() => {
+          setRedirectState('done');
+        });
+      return;
+    }
+
+    const transport = availableTransport.includes(Transport.MQTT)
+      ? Transport.MQTT
+      : availableTransport[0];
+    if (!transport) {
+      return;
+    }
+
+    handleInvitation({
+      redirectUri: config.requestCredentialRedirectUri,
+      transport: [transport],
+      url: invitationUrl,
+    })
+      .then((result) => {
+        setInvitationResult(result);
+      })
+      .catch((err: unknown) => {
+        setState(LoaderViewState.Warning);
+        if (
+          err instanceof OneError &&
+          err.cause?.includes('BLE adapter not enabled')
+        ) {
+          setAdapterEnabled(false);
+        } else {
+          setError(err);
+          if (
+            err &&
+            isInvalidInvitationUrlError(err) &&
+            !isValidHttpUrl(invitationUrl)
+          ) {
+            setState(LoaderViewState.Error);
+          }
+        }
+      });
+  }, [
+    availableTransport,
+    canHandleInvitation,
+    handleInvitation,
+    invitationUrl,
+    managementNavigation,
+    redirectState,
+  ]);
+```
 
 ### TxCode Handling
 

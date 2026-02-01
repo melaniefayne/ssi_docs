@@ -94,6 +94,40 @@ TransactionLog
   +-- verifierInfo
 ```
 
+#### BookmarkDao (Room DAO)
+
+The `BookmarkDao` interface demonstrates how EUDI Android accesses credential metadata through Room's annotation-driven DAO pattern. Each `StorageDao` table follows this same interface contract:
+
+```kotlin
+// File: storage-logic/src/main/java/eu/europa/ec/storagelogic/dao/BookmarkDao.kt
+
+@Dao
+interface BookmarkDao : StorageDao<Bookmark> {
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    override suspend fun store(value: Bookmark)
+
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    override suspend fun storeAll(values: List<Bookmark>)
+
+    @Query("SELECT * FROM bookmarks WHERE identifier = :identifier")
+    override suspend fun retrieve(identifier: String): Bookmark?
+
+    @Query("SELECT * FROM bookmarks")
+    override suspend fun retrieveAll(): List<Bookmark>
+
+    @Update
+    override suspend fun update(value: Bookmark)
+
+    @Query("DELETE FROM bookmarks WHERE identifier = :identifier")
+    override suspend fun delete(identifier: String)
+
+    @Query("DELETE FROM bookmarks")
+    override suspend fun deleteAll()
+}
+```
+
+All DAO operations are `suspend` functions, ensuring database access is performed on coroutine dispatchers rather than the main thread. The `OnConflictStrategy.ABORT` on inserts prevents silent overwrites of existing bookmarks.
+
 ### Credential Policies via DocumentIssuanceConfig
 
 EUDI configures credential behavior through `DocumentIssuanceConfig`, which includes a `CredentialPolicy` enum:
@@ -145,6 +179,41 @@ The wallet preferentially selects hardware-backed secure areas. Software-backed 
 ## Procivis Android Implementation
 
 Procivis uses a cross-platform core SDK (One Core) with platform-specific key storage adapters.
+
+### Wallet State Management (MobX-State-Tree)
+
+Procivis ONE manages wallet-level state through a MobX-State-Tree model that tracks RSE setup status and wallet unit registration:
+
+```typescript
+// File: app/models/wallet-store/wallet-store.ts
+
+export const WalletStoreModel = types
+  .model('WalletStore', {
+    isNFCSupported: types.boolean,
+    isRSESetup: types.boolean,
+    walletProvider: WalletProviderModel,
+    walletUnitId: types.string,
+  })
+  .views((self) => ({
+    get registeredWalletUnitId() {
+      return self.walletUnitId ? self.walletUnitId : undefined;
+    },
+  }))
+  .actions((self) => ({
+    rseSetupCompleted: () => {
+      self.isRSESetup = true;
+    },
+    walletDeleted: () => {
+      self.walletUnitId = '';
+      self.isRSESetup = false;
+    },
+    walletUnitIdSetup: (walletUnitId: string) => {
+      self.walletUnitId = walletUnitId;
+    },
+  }));
+```
+
+The `isRSESetup` flag is checked before credential issuance to determine whether the Remote Secure Element setup flow needs to be triggered. The `walletUnitId` identifies the wallet instance for attestation and credential binding.
 
 ### Android Keystore via SECURE_ELEMENT Configuration
 

@@ -23,6 +23,63 @@ WalletCoreDocumentsController.getScopedDocuments()
 
 `getScopedDocuments()` iterates over all issuers declared in the wallet's configuration. For each issuer, it calls `OpenId4VciManager.getIssuerMetadata()`, which performs the HTTP request to the well-known endpoint and deserializes the response into a `CredentialIssuerMetadata` object.
 
+```kotlin
+// File: core-logic/src/main/java/eu/europa/ec/corelogic/controller/WalletCoreDocumentsController.kt
+
+override suspend fun getScopedDocuments(locale: Locale): FetchScopedDocumentsPartialState {
+    return withContext(dispatcher) {
+        runCatching {
+
+            val metadata: Map<String, CredentialIssuerMetadata> =
+                openId4VciManagers.mapValues { (_, manager) ->
+                    manager.getIssuerMetadata().getOrThrow()
+                }
+
+            val documents: List<ScopedDocumentDomain> =
+                metadata.flatMap { (issuer, meta) ->
+                    meta.credentialConfigurationsSupported.map { (id, config) ->
+
+                        val name: String = config.credentialMetadata.getLocalizedDisplayName(
+                            userLocale = locale,
+                            fallback = id.value
+                        )
+
+                        val isPid = when (config) {
+                            is MsoMdocCredential -> config.docType.toDocumentIdentifier() == DocumentIdentifier.MdocPid
+                            is SdJwtVcCredential -> config.type.toDocumentIdentifier() == DocumentIdentifier.SdJwtPid
+                            else -> false
+                        }
+
+                        val formatType = when (config) {
+                            is MsoMdocCredential -> config.docType
+                            is SdJwtVcCredential -> config.type
+                            else -> null
+                        }
+
+                        ScopedDocumentDomain(
+                            name = name,
+                            configurationId = id.value,
+                            credentialIssuerId = issuer,
+                            formatType = formatType,
+                            isPid = isPid
+                        )
+                    }
+                }
+
+            if (documents.isNotEmpty()) {
+                FetchScopedDocumentsPartialState.Success(documents = documents)
+            } else {
+                FetchScopedDocumentsPartialState.Failure(errorMessage = genericErrorMessage)
+            }
+        }
+    }.getOrElse {
+        FetchScopedDocumentsPartialState.Failure(
+            errorMessage = it.localizedMessage ?: genericErrorMessage
+        )
+    }
+}
+```
+
 ### Metadata Mapping
 
 The raw `CredentialIssuerMetadata` is mapped to `ScopedDocumentDomain`, the wallet's internal domain model for representing available credentials. The mapping extracts:
@@ -88,6 +145,47 @@ The EUDI iOS wallet supports metadata caching through a configuration flag:
 
 ```
 cacheIssuerMetadata: true
+```
+
+The actual VCI configuration with caching enabled:
+
+```swift
+// File: Modules/logic-core/Sources/Config/WalletKitConfig.swift
+
+var vciConfig: [String: OpenId4VciConfiguration] {
+
+    let openId4VciConfigurations: [OpenId4VciConfiguration] = {
+      switch configLogic.appBuildVariant {
+      case .DEMO:
+        return [
+          .init(
+            credentialIssuerURL: "https://issuer.eudiw.dev",
+            clientId: "wallet-dev",
+            keyAttestationsConfig: .init(walletAttestationsProvider: walletKitAttestationProvider),
+            authFlowRedirectionURI: URL(string: "eu.europa.ec.euidi://authorization")!,
+            usePAR: true,
+            useDpopIfSupported: true,
+            cacheIssuerMetadata: true
+          ),
+          // ... additional issuer configurations
+        ]
+      // ...
+      }
+    }()
+
+    return openId4VciConfigurations.reduce(
+      into: [String: OpenId4VciConfiguration]()
+    ) { dict, config in
+      guard
+        let issuer = config.credentialIssuerURL,
+        let url = URL(string: issuer),
+        let host = url.host
+      else {
+        return
+      }
+      dict[host] = config
+    }
+  }
 ```
 
 When enabled, the wallet caches the fetched `CredentialIssuerMetadata` and reuses it for subsequent requests to the same issuer. This avoids redundant network requests during:

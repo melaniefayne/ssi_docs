@@ -65,24 +65,48 @@ The SDK defines credential policies that control batch behavior:
 
 When using `oneTimeUse` policy, the batch size is configured via `CreateDocumentSettings`:
 
-```
-CreateDocumentSettings(
-    credentialPolicy = CredentialPolicy.OneTimeUse,
-    numberOfCredentials = 10
+```kotlin
+// File: core-logic/src/main/java/eu/europa/ec/corelogic/config/DocumentIssuanceConfig.kt
+
+data class DocumentIssuanceConfig(
+    val defaultRule: DocumentIssuanceRule,
+    val documentSpecificRules: Map<DocumentIdentifier, DocumentIssuanceRule>
+) {
+    fun getRuleForDocument(documentIdentifier: DocumentIdentifier?): DocumentIssuanceRule =
+        documentSpecificRules[documentIdentifier] ?: defaultRule
+}
+
+data class DocumentIssuanceRule(
+    val policy: CredentialPolicy,
+    val numberOfCredentials: Int,
 )
 ```
 
 The `numberOfCredentials` parameter specifies how many credential instances to request. For PID (Personal Identification Document) credentials, a typical configuration is 10 instances, providing a pool for presentations without requiring frequent re-issuance.
 
-**DocumentIssuanceConfig:**
+**Default Configuration (from WalletKitConfig):**
 
-The `DocumentIssuanceConfig` aggregates the issuance configuration:
+```swift
+// File: Modules/logic-core/Sources/Config/WalletKitConfig.swift
 
-```
-DocumentIssuanceConfig(
-    numberOfCredentials = 10,
-    credentialPolicy = CredentialPolicy.OneTimeUse
-)
+var documentIssuanceConfig: DocumentIssuanceConfig {
+    DocumentIssuanceConfig(
+      defaultRule: DocumentIssuanceRule(
+        policy: .rotateUse,
+        numberOfCredentials: 1
+      ),
+      documentSpecificRules: [
+        DocumentTypeIdentifier.mDocPid: DocumentIssuanceRule(
+          policy: .oneTimeUse,
+          numberOfCredentials: 10
+        ),
+        DocumentTypeIdentifier.sdJwtPid: DocumentIssuanceRule(
+          policy: .oneTimeUse,
+          numberOfCredentials: 10
+        )
+      ]
+    )
+  }
 ```
 
 When batch issuance is requested, the SDK generates the specified number of key pairs, constructs a proof JWT for each, and sends a single credential request with the `proofs` (plural) field containing all JWTs.
@@ -130,10 +154,24 @@ The iOS SDK supports the same credential policies as Android:
 **`DocumentIssuanceConfig`:**
 
 ```swift
-DocumentIssuanceConfig(
-    numberOfCredentials: 10,
-    credentialPolicy: .oneTimeUse
-)
+// File: Modules/logic-core/Sources/Config/DocumentIssuanceConfig.swift
+
+struct DocumentIssuanceConfig {
+  let defaultRule: DocumentIssuanceRule
+  let documentSpecificRules: [DocumentTypeIdentifier: DocumentIssuanceRule]
+
+  func rule(for documentIdentifier: DocumentTypeIdentifier?) -> DocumentIssuanceRule {
+    guard let documentIdentifier, let rule = documentSpecificRules[documentIdentifier] else {
+      return defaultRule
+    }
+    return rule
+  }
+}
+
+struct DocumentIssuanceRule {
+  let policy: CredentialPolicy
+  let numberOfCredentials: Int
+}
 ```
 
 **Credential Policies:**

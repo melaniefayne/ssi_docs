@@ -35,6 +35,45 @@ After the issuance flow completes, the overall outcome is represented by **Issue
 
 The `PartialSuccess` state is particularly important for multi-credential offers. If an offer contains both a PID and an mDL, and the PID is issued immediately but the mDL is deferred, the result is `PartialSuccess` with the PID in the `issued` list and the mDL in the deferred or non-issued list.
 
+The `IssueEvent.Finished` handler determines the final state:
+
+```kotlin
+// File: core-logic/src/main/java/eu/europa/ec/corelogic/controller/WalletCoreDocumentsController.kt
+
+is IssueEvent.Finished -> {
+
+    if (deferredDocuments.isNotEmpty()) {
+        trySendBlocking(IssueDocumentsPartialState.DeferredSuccess(deferredDocuments))
+        return@OnIssueEvent
+    }
+
+    if (event.issuedDocuments.isEmpty()) {
+        trySendBlocking(
+            IssueDocumentsPartialState.Failure(
+                errorMessage = documentErrorMessage
+            )
+        )
+        return@OnIssueEvent
+    }
+
+    if (event.issuedDocuments.size == totalDocumentsToBeIssued) {
+        trySendBlocking(
+            IssueDocumentsPartialState.Success(
+                documentIds = event.issuedDocuments
+            )
+        )
+        return@OnIssueEvent
+    }
+
+    trySendBlocking(
+        IssueDocumentsPartialState.PartialSuccess(
+            documentIds = event.issuedDocuments,
+            nonIssuedDocuments = nonIssuedDocuments
+        )
+    )
+}
+```
+
 ### Deferred Document Handling
 
 When a credential is deferred, the SDK stores the deferred document record (including the `transaction_id`, issuer endpoint, and credential metadata) in persistent storage. The wallet can later attempt to retrieve the deferred credential.
@@ -107,6 +146,45 @@ Wallet                          Issuer                          Verifier
   |                               |                               |
 ```
 
+The actual implementation in `DocumentOfferInteractorImpl`:
+
+```swift
+// File: Modules/feature-issuance/Sources/Interactor/DocumentOfferInteractor.swift
+
+let issuedDocuments = try await walletController.issueDocumentsByOfferUrl(
+    offerUri: uri,
+    docTypes: docOffers,
+    txCodeValue: txCodeValue
+)
+
+if issuedDocuments.isEmpty {
+    return .failure(WalletCoreError.unableToIssueAndStore)
+} else if issuedDocuments.first(where: { $0.isDeferred }) != nil {
+    return .deferredSuccess(retrieveDeferredRoute(/* ... */))
+} else if let authorizePresentationUrl = issuedDocuments.first?.authorizePresentationUrl {
+    guard
+      let presentationUrl = authorizePresentationUrl.toCompatibleUrl(),
+      let presentationComponents = URLComponents(url: presentationUrl, resolvingAgainstBaseURL: true) else {
+      return .failure(WalletCoreError.unableToIssueAndStore)
+    }
+    let session = await walletController.startSameDevicePresentation(deepLink: presentationComponents)
+    return .dynamicIssuance(session)
+} else if issuedDocuments.count == docOffers.count {
+    let documentIdentifiers = issuedDocuments.compactMap { $0.id }
+    return await fetchAndHandleDocuments(
+      successNavigation: successNavigation,
+      documentIdentifiers: documentIdentifiers
+    )
+} else {
+    let documentIdentifiers = issuedDocuments.compactMap { $0.id }
+    return await fetchAndHandleDocuments(
+      successNavigation: successNavigation,
+      documentIdentifiers: documentIdentifiers,
+      isPartialState: true
+    )
+}
+```
+
 **Use case example:** The issuer wants to issue a PID but requires the wallet to present an existing identity document (e.g., a national ID card already stored in the wallet) to verify the holder's identity before issuance. The dynamic issuance flow enables this without leaving the issuance protocol.
 
 ### Deferred Credential Retrieval
@@ -136,6 +214,35 @@ The Procivis ONE wallet handles issuer responses through the **credential-accept
 | `Success` | The credential was issued and stored successfully. | Green success indicator. Displays credential summary. Optional "Back to Service" button if `redirectUri` is provided. |
 | `Error` (RSE locked) | The issuance failed because the Remote Signing Element is locked (typically from too many failed PIN attempts). | Error screen with RSE-specific messaging. User must unlock the RSE before retrying. |
 | `Warning` (other errors) | The issuance encountered a non-fatal error or an unexpected condition. | Warning screen with error details. User can retry or dismiss. |
+
+The state determination logic:
+
+```typescript
+// File: app/screens/credential/credential-accept-result-screen.tsx
+
+const { error, redirectUri } = route.params;
+
+const state = useMemo(() => {
+    if (!error) {
+      return LoaderViewState.Success;
+    }
+    if (isRSELockedError(error)) {
+      return LoaderViewState.Error;
+    }
+    return LoaderViewState.Warning;
+  }, [error]);
+
+const redirectButtonHandler = useCallback(() => {
+    if (!redirectUri) {
+      return;
+    }
+    Linking.openURL(redirectUri)
+      .then(closeButtonHandler)
+      .catch((e) => {
+        reportException(e, "Couldn't open redirect URI");
+      });
+  }, [closeButtonHandler, redirectUri]);
+```
 
 ### Error Classification
 

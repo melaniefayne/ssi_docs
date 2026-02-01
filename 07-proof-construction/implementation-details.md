@@ -36,6 +36,34 @@ SDK (OpenId4VciManager)              App Layer
 
 The `DocumentRequiresUserAuth` event provides a `getCryptoObjectForSigning()` method that returns a `BiometricPrompt.CryptoObject` bound to the secure key in the Android Keystore. This crypto object is passed to the BiometricPrompt, ensuring that biometric authentication unlocks the specific key needed for signing.
 
+```kotlin
+// File: core-logic/src/main/java/eu/europa/ec/corelogic/controller/WalletCoreDocumentsController.kt
+
+is IssueEvent.DocumentRequiresUserAuth -> {
+    launch {
+        val keyUnlockDataMap =
+            event.keysRequireAuth.mapValues { (keyAlias, secureArea) ->
+                getDefaultKeyUnlockData(secureArea, keyAlias)
+            }
+
+        val keyUnlockData =
+            keyUnlockDataMap.values.first()
+
+        val cryptoObject = keyUnlockData?.getCryptoObjectForSigning()
+
+        trySendBlocking(
+            IssueDocumentsPartialState.UserAuthRequired(
+                crypto = BiometricCrypto(cryptoObject),
+                resultHandler = DeviceAuthenticationResult(
+                    onAuthenticationSuccess = { event.resume(keyUnlockDataMap) },
+                    onAuthenticationError = { event.cancel(null) }
+                )
+            )
+        )
+    }
+}
+```
+
 **Authenticator types:**
 
 The BiometricPrompt is configured with:
@@ -67,6 +95,30 @@ On authentication failure:
 1. The controller may retry (if the failure is recoverable, e.g., fingerprint not recognized).
 2. After maximum retries or user cancellation, the issuance flow is cancelled.
 3. The SDK emits `IssueEvent.DocumentFailed` with the authentication error.
+
+The SDK also emits `DocumentRequiresCreateSettings` before proof construction, allowing the app to configure credential policies per document type:
+
+```kotlin
+// File: core-logic/src/main/java/eu/europa/ec/corelogic/controller/WalletCoreDocumentsController.kt
+
+is IssueEvent.DocumentRequiresCreateSettings -> {
+    launch {
+        val offeredDocIdentifier = event.offeredDocument.documentIdentifier
+
+        val documentIssuanceRule = walletCoreConfig
+            .documentIssuanceConfig
+            .getRuleForDocument(documentIdentifier = offeredDocIdentifier)
+
+        event.resume(
+            eudiWallet.getDefaultCreateDocumentSettings(
+                offeredDocument = event.offeredDocument,
+                credentialPolicy = documentIssuanceRule.policy,
+                numberOfCredentials = documentIssuanceRule.numberOfCredentials,
+            )
+        )
+    }
+}
+```
 
 ### Key Storage
 

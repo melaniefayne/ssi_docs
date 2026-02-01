@@ -11,9 +11,30 @@ This document describes how each wallet implementation handles key attestation a
 The EUDI Android wallet implements key attestation through `WalletCoreAttestationProvider`, which exposes two methods:
 
 ```kotlin
-interface WalletCoreAttestationProvider {
-    suspend fun getWalletAttestation(keyInfo: KeyInfo): String
-    suspend fun getKeyAttestation(keys: List<Key>, nonce: String): String
+// File: core-logic/src/main/java/eu/europa/ec/corelogic/provider/WalletCoreAttestationProvider.kt
+
+interface WalletCoreAttestationProvider : WalletAttestationsProvider
+
+class WalletCoreAttestationProviderImpl(
+    private val walletCoreConfig: WalletCoreConfig,
+    private val walletAttestationRepository: WalletAttestationRepository
+) : WalletCoreAttestationProvider {
+
+    override suspend fun getWalletAttestation(
+        keyInfo: KeyInfo
+    ): Result<String> = walletAttestationRepository.getWalletAttestation(
+        baseUrl = walletCoreConfig.walletProviderHost,
+        keyInfo = keyInfo.publicKey.toJwk()
+    )
+
+    override suspend fun getKeyAttestation(
+        keys: List<KeyInfo>,
+        nonce: Nonce?
+    ): Result<String> = walletAttestationRepository.getKeyAttestation(
+        baseUrl = walletCoreConfig.walletProviderHost,
+        keys = keys.map { it.publicKey.toJwk() },
+        nonce = nonce?.value
+    )
 }
 ```
 
@@ -118,9 +139,44 @@ Public keys are serialized to JWK format before being sent to the attestation en
 The iOS implementation uses `WalletKitAttestationProvider` with the same two-method pattern:
 
 ```swift
-protocol WalletKitAttestationProvider {
-    func getWalletAttestation(key: SecKey) async throws -> String
-    func getKeysAttestation(keys: [SecKey], nonce: String) async throws -> String
+// File: Modules/logic-core/Sources/Provider/WalletKitAttestationProvider.swift
+
+protocol WalletKitAttestationProvider: WalletAttestationsProvider {
+  var baseUrl: String { get }
+  func getWalletAttestation(key: any JOSESwift.JWK) async throws -> String
+  func getKeysAttestation(keys: [any JOSESwift.JWK], nonce: String?) async throws -> String
+}
+
+final class WalletKitAttestationProviderImpl: WalletKitAttestationProvider {
+
+  let repository: WalletAttestationRepository
+  let baseUrl: String
+
+  init(with repository: WalletAttestationRepository, and configLogic: WalletProviderAttestationConfig) {
+    self.repository = repository
+    self.baseUrl = configLogic.walletProviderAttestationUrl
+  }
+
+  func getWalletAttestation(key: any JOSESwift.JWK) async throws -> String {
+    let jwkDict = try key.toDictionary()
+    let payload = ["jwk": jwkDict]
+    let encodedPayload = try JSONSerialization.data(withJSONObject: payload, options: [])
+    let response = try await repository.issueWalletInstanceAttestation(host: self.baseUrl, payload: encodedPayload)
+    return response.walletInstanceAttestation
+  }
+
+  func getKeysAttestation(keys: [any JOSESwift.JWK], nonce: String?) async throws -> String {
+    let jwkDict = try keys.map { try $0.toDictionary() }
+    var payload: [String: Any] = [
+      "jwkSet": ["keys": jwkDict]
+    ]
+    if let nonce {
+      payload["nonce"] = nonce
+    }
+    let encodedPayload = try JSONSerialization.data(withJSONObject: payload, options: [])
+    let response = try await repository.issueWalletUnitAttestation(host: self.baseUrl, payload: encodedPayload)
+    return response.walletUnitAttestation
+  }
 }
 ```
 
@@ -142,28 +198,17 @@ The iOS wallet communicates with the same wallet provider endpoints as Android:
 
 The iOS wallet uses the `JOSESwift` library for JWK serialization:
 
-```swift
-// Conceptual -- JWK from SecKey
-import JOSESwift
-
-let publicKey: SecKey = ... // From Secure Enclave
-let jwk = try ECPublicKey(publicKey: publicKey)
-
-let jwkData = jwk.jsonData()
-// {
-//   "kty": "EC",
-//   "crv": "P-256",
-//   "x": "base64url-encoded-x",
-//   "y": "base64url-encoded-y"
-// }
-```
-
-For key attestation, multiple keys are serialized into a JWK Set:
+As shown in the `WalletKitAttestationProviderImpl` above, JWK serialization uses the `JOSESwift` library's `toDictionary()` method on `JWK` objects. For key attestation, multiple keys are serialized into a JWK Set structure with optional nonce binding:
 
 ```swift
-let keys: [SecKey] = [key1, key2, key3]
-let jwkSet = JWKSet(keys: try keys.map { try ECPublicKey(publicKey: $0) })
-let jwkSetData = try jwkSet.jsonData()
+// From WalletKitAttestationProviderImpl.getKeysAttestation()
+let jwkDict = try keys.map { try $0.toDictionary() }
+var payload: [String: Any] = [
+  "jwkSet": ["keys": jwkDict]
+]
+if let nonce {
+  payload["nonce"] = nonce
+}
 ```
 
 ### Nonce Binding

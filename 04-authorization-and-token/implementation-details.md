@@ -13,11 +13,31 @@ On Android, the entire authorization and token exchange flow is handled internal
 The wallet application interacts with the SDK through `WalletCoreDocumentsController`, which exposes high-level operations:
 
 ```kotlin
-// Application code -- authorization is implicit
-val documents = walletCoreDocumentsController.issueDocumentsByOfferUri(
-    offerUri = offerUri,
-    txCode = userEnteredCode // optional, if offer requires TxCode
-)
+// File: core-logic/src/main/java/eu/europa/ec/corelogic/controller/WalletCoreDocumentsController.kt
+
+override fun issueDocumentsByOffer(
+    offer: Offer,
+    txCode: String?,
+): Flow<IssueDocumentsPartialState> =
+    callbackFlow {
+
+        val issuerId = offer
+            .credentialOffer
+            .credentialIssuerIdentifier
+            .toString()
+
+        val manager = openId4VciManagers[issuerId]
+            ?: openId4VciManagers.values.firstOrNull()
+
+        require(manager != null) { documentErrorMessage }
+
+        manager.issueDocumentByOffer(
+            offer = offer,
+            onIssueEvent = issuanceCallback(),
+            txCode = txCode,
+        )
+        awaitClose()
+    }
 ```
 
 The SDK resolves the grant type from the credential offer, selects the appropriate flow (authorization code or pre-authorized code), and executes it internally.
@@ -79,14 +99,17 @@ The iOS implementation mirrors the Android architecture. `WalletKitController` d
 `WalletKitConfig` explicitly enables security features:
 
 ```swift
-// From WalletKitConfig
-struct VciConfig {
-    let issuerUrl: String
-    let clientId: String
-    let authFlowRedirectionURI: String  // "eu.europa.ec.euidi://authorization"
-    let usePAR: Bool                     // true
-    let useDpopIfSupported: Bool         // true
-}
+// File: Modules/logic-core/Sources/Config/WalletKitConfig.swift
+
+.init(
+    credentialIssuerURL: "https://issuer.eudiw.dev",
+    clientId: "wallet-dev",
+    keyAttestationsConfig: .init(walletAttestationsProvider: walletKitAttestationProvider),
+    authFlowRedirectionURI: URL(string: "eu.europa.ec.euidi://authorization")!,
+    usePAR: true,
+    useDpopIfSupported: true,
+    cacheIssuerMetadata: true
+)
 ```
 
 Key configuration values:
@@ -147,18 +170,40 @@ Procivis ONE exposes the authorization flow at a higher level than the EUDI impl
 When the wallet processes a credential offer, the `handleInvitation()` function returns a result that indicates which flow is required:
 
 ```typescript
-const result = await oneCore.handleInvitation(offerUri);
+// File: app/screens/credential/invitation-process-screen.tsx
 
-switch (result.type) {
-  case 'CREDENTIAL_ISSUANCE':
-    // Pre-authorized code flow -- proceed directly
-    navigateToIssuanceScreen(result);
-    break;
-  case 'AUTHORIZATION_CODE_FLOW':
-    // Authorization code flow -- browser auth required
-    openBrowserForAuth(result.authorizationUrl);
-    break;
-}
+useEffect(() => {
+    if (!invitationResult) {
+      return;
+    }
+    if (invitationResult.type_ === 'AUTHORIZATION_CODE_FLOW') {
+      openBrowser(invitationResult.authorizationCodeFlowUrl);
+    } else if (invitationResult.type_ === 'PROOF_REQUEST') {
+      managementNavigation.replace('ShareCredential', {
+        params: { request: invitationResult },
+        screen: 'ProofRequest',
+      });
+    } else {
+      if (isLoadingWU) {
+        return;
+      }
+      if (invitationResult.txCode) {
+        managementNavigation.replace('IssueCredential', {
+          params: { invitationResult: invitationResult },
+          screen: 'CredentialConfirmationCode',
+        });
+      } else {
+        const needsRSESetup =
+          invitationResult.keyStorageSecurityLevels?.includes(
+            KeyStorageSecurityBindingEnum.HIGH,
+          ) && !isRSESetup;
+        managementNavigation.replace('IssueCredential', {
+          params: { invitationResult: invitationResult },
+          screen: needsRSESetup ? 'RSEInfo' : 'CredentialOffer',
+        });
+      }
+    }
+  }, [invitationResult, isRSESetup, isLoadingWU, managementNavigation, rootNavigation]);
 ```
 
 The `AUTHORIZATION_CODE_FLOW` result type signals that the wallet must open a browser for user authentication.
@@ -195,14 +240,31 @@ const config = {
 When the browser redirects to the configured URI, the app intercepts the redirect and passes the authorization code back to the core engine. The `useContinueIssuance()` hook handles the redirect callback:
 
 ```typescript
-const { continueIssuance } = useContinueIssuance();
+// File: app/screens/credential/invitation-process-screen.tsx
 
-// Called when redirect is received
-const handleRedirect = async (redirectUrl: string) => {
-  const result = await continueIssuance(redirectUrl);
-  // Core engine extracts auth code, exchanges for token,
-  // and proceeds with credential request
-};
+const { mutateAsync: continueIssuance } = useContinueIssuance();
+
+const handleContinueIssuance = useCallback(
+    async (url: string) => {
+      if (
+        config.requestCredentialRedirectUri &&
+        url.startsWith(config.requestCredentialRedirectUri)
+      ) {
+        closeBrowser();
+        const result = await continueIssuance(url);
+        managementNavigation.replace('IssueCredential', {
+          params: {
+            invitationResult: {
+              type_: 'CREDENTIAL_ISSUANCE',
+              ...result,
+            },
+          },
+          screen: 'CredentialOffer',
+        });
+      }
+    },
+    [continueIssuance, managementNavigation],
+  );
 ```
 
 ### Pre-Authorized Code Flow

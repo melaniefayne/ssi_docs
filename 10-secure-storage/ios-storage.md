@@ -133,14 +133,41 @@ The `WalletStorage` class from EudiWalletKit manages the persistence of credenti
 
 EUDI iOS uses the Keychain for storing the wallet PIN via `KeychainPinStorageProvider`:
 
-```
-KeychainPinStorageProvider
-  +-- storePIN(pin: String)     // Stores encrypted PIN in Keychain
-  +-- retrievePIN() -> String?  // Retrieves PIN for verification
-  +-- deletePIN()               // Securely removes PIN
+```swift
+// File: Modules/logic-authentication/Sources/Storage/KeychainPinStorageProvider.swift
+
+final class KeychainPinStorageProvider: PinStorageProvider {
+
+  private let keyChainController: KeyChainController
+
+  init(keyChainController: KeyChainController) {
+    self.keyChainController = keyChainController
+  }
+
+  func retrievePin() -> String? {
+    keyChainController.getValue(key: KeyIdentifier.devicePin)
+  }
+
+  func setPin(with pin: String) {
+    keyChainController.storeValue(key: KeyIdentifier.devicePin, value: pin)
+  }
+
+  func isPinValid(with pin: String) -> Bool {
+    keyChainController.getValue(key: KeyIdentifier.devicePin) == pin
+  }
+}
+
+private enum KeyIdentifier: String, KeyChainWrapper {
+
+  public var value: String {
+    self.rawValue
+  }
+
+  case devicePin
+}
 ```
 
-The PIN is stored with `kSecAttrAccessibleWhenUnlockedThisDeviceOnly` to ensure it is:
+The `KeychainPinStorageProvider` delegates all storage operations to a `KeyChainController`, which wraps iOS Keychain Services. The `KeyIdentifier` enum uses `KeyChainWrapper` conformance to provide type-safe key names. The PIN is stored with `kSecAttrAccessibleWhenUnlockedThisDeviceOnly` to ensure it is:
 - Encrypted at rest
 - Accessible only when the device is unlocked
 - Not included in iCloud or iTunes backups
