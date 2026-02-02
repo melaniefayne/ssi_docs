@@ -12,16 +12,16 @@ The European Digital Identity Wallet is a reference implementation developed und
 
 ### Technical Profile
 
-| Attribute | Android | iOS |
-|-----------|---------|-----|
-| **Language** | Kotlin | Swift |
-| **Core SDK** | `eudi-lib-android-wallet-core` v0.23.0 | EudiWalletKit v0.19.4 |
-| **Platform** | Native Android | Native iOS |
-| **OID4VCI Version** | v1.0 (Final) | v1.0 (Final) |
-| **Credential Formats** | mDoc (ISO 18013-5), SD-JWT-VC | mDoc (ISO 18013-5), SD-JWT-VC |
-| **Key Storage** | Android Keystore (hardware-backed) | iOS Secure Enclave |
-| **Authentication** | Biometric (device-level) | Biometric (device-level) |
-| **Authorization** | OAuth 2.0 with PAR and DPoP | OAuth 2.0 with PAR and DPoP |
+| Attribute              | Android                                                                                                                                                                                                                   | iOS                           |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- |
+| **Language**           | Kotlin                                                                                                                                                                                                                    | Swift                         |
+| **Core SDK**           | `eudi-lib-android-wallet-core` v0.23.0                                                                                                                                                                                    | EudiWalletKit v0.19.4         |
+| **Platform**           | Native Android                                                                                                                                                                                                            | Native iOS                    |
+| **OID4VCI Version**    | v1.0 (Final)                                                                                                                                                                                                              | v1.0 (Final)                  |
+| **Credential Formats** | mDoc (ISO 18013-5), SD-JWT-VC                                                                                                                                                                                             | mDoc (ISO 18013-5), SD-JWT-VC |
+| **Key Storage**        | Android Keystore (hardware-backed)                                                                                                                                                                                        | iOS Secure Enclave            |
+| **Authentication**     | Biometric (device-level)                                                                                                                                                                                                  | Biometric (device-level)      |
+| **Authorization**      | OAuth 2.0 with [PAR](https://darutk.medium.com/illustrated-par-oauth-2-0-pushed-authorization-requests-652d71ed5cfb) and [DPoP](https://www.ibm.com/docs/en/security-verify?topic=connect-demonstrating-proof-possession) | OAuth 2.0 with PAR and DPoP   |
 
 ### Key Characteristics
 
@@ -45,16 +45,16 @@ Procivis ONE is a cross-platform wallet built with React Native, backed by a Rus
 
 ### Technical Profile
 
-| Attribute | Value |
-|-----------|-------|
-| **Language** | TypeScript (React Native), Rust (core) |
-| **Core SDK** | `@procivis/react-native-one-core` v1.81885.0 |
-| **Platform** | Cross-platform (Android and iOS via React Native) |
-| **OID4VCI Versions** | Draft 13, Final 1, HAIP, Swiyu |
-| **Credential Formats** | W3C VC (JSON-LD), SD-JWT, JSON-LD with BBS+, ISO mDL (mDoc) |
-| **Key Storage** | Secure Element, Android Keystore, Ubiqu Remote Secure Element (RSE) |
-| **Transport Protocols** | HTTP, BLE (Bluetooth Low Energy), MQTT |
-| **Post-Quantum Support** | CRYSTALS-DILITHIUM |
+| Attribute                | Value                                                               |
+| ------------------------ | ------------------------------------------------------------------- |
+| **Language**             | TypeScript (React Native), Rust (core)                              |
+| **Core SDK**             | `@procivis/react-native-one-core` v1.81885.0                        |
+| **Platform**             | Cross-platform (Android and iOS via React Native)                   |
+| **OID4VCI Versions**     | Draft 13, Final 1, HAIP, Swiyu                                      |
+| **Credential Formats**   | W3C VC (JSON-LD), SD-JWT, JSON-LD with BBS+, ISO mDL (mDoc)         |
+| **Key Storage**          | Secure Element, Android Keystore, Ubiqu Remote Secure Element (RSE) |
+| **Transport Protocols**  | HTTP, BLE (Bluetooth Low Energy), MQTT                              |
+| **Post-Quantum Support** | CRYSTALS-DILITHIUM                                                  |
 
 ### Key Characteristics
 
@@ -80,16 +80,16 @@ Affinidi provides a cloud-based credential issuance service paired with a holder
 
 ### Technical Profile
 
-| Attribute | Value |
-|-----------|-------|
-| **Architecture** | Cloud-based issuance service + Affinidi Vault (holder) |
-| **TDK Languages** | TypeScript, Python, Java, Kotlin, .NET, and others |
-| **OID4VCI Version** | OID4VCI with pre-authorized code flow |
-| **Credential Format** | W3C VC Data Model with JSON-LD |
-| **Signature Algorithm** | EcdsaSecp256k1Signature2019 |
-| **DID Method** | `did:key` |
-| **Claim Modes** | TX_CODE (user-provided transaction code), FIXED_HOLDER (pre-determined holder DID) |
-| **Revocation** | Supported (credential status management) |
+| Attribute               | Value                                                                              |
+| ----------------------- | ---------------------------------------------------------------------------------- |
+| **Architecture**        | Cloud-based issuance service + Affinidi Vault (holder)                             |
+| **TDK Languages**       | TypeScript, Python, Java, Kotlin, .NET, and others                                 |
+| **OID4VCI Version**     | OID4VCI with pre-authorized code flow                                              |
+| **Credential Format**   | W3C VC Data Model with JSON-LD                                                     |
+| **Signature Algorithm** | EcdsaSecp256k1Signature2019                                                        |
+| **DID Method**          | `did:key`                                                                          |
+| **Claim Modes**         | TX_CODE (user-provided transaction code), FIXED_HOLDER (pre-determined holder DID) |
+| **Revocation**          | Supported (credential status management)                                           |
 
 ### Key Characteristics
 
@@ -113,24 +113,24 @@ Affinidi provides a cloud-based credential issuance service paired with a holder
 
 ## Comparison Table
 
-| Dimension | EUDI Wallet | Procivis ONE | Affinidi |
-|-----------|-------------|--------------|----------|
-| **Architecture** | Native mobile (Android + iOS) | Cross-platform (React Native + Rust core) | Cloud service + holder vault |
-| **Languages** | Kotlin, Swift | TypeScript, Rust | Multi-language TDK (TS, Python, Java, etc.) |
-| **Core SDK** | `eudi-lib-android-wallet-core` v0.23.0 / EudiWalletKit v0.19.4 | `@procivis/react-native-one-core` v1.81885.0 | Affinidi Credential Issuance Service |
-| **OID4VCI Version** | v1.0 (Final) | Draft 13, Final 1, HAIP, Swiyu | Pre-authorized code flow |
-| **Credential Formats** | mDoc, SD-JWT-VC | W3C VC, SD-JWT, JSON-LD + BBS+, mDL | W3C VC (JSON-LD) |
-| **Signature Algorithms** | Platform-dependent (ES256, ES384) | ES256, EdDSA, BBS+, CRYSTALS-DILITHIUM | EcdsaSecp256k1Signature2019 |
-| **DID Methods** | Multiple (issuer-dependent) | Multiple (configurable) | `did:key` |
-| **Key Storage** | Android Keystore / Secure Enclave (hardware-only) | Secure Element, Android Keystore, Ubiqu RSE | Cloud-managed (Affinidi Vault) |
-| **Transport** | HTTP | HTTP, BLE, MQTT | HTTP |
-| **Authorization** | OAuth 2.0 with PAR, DPoP | OAuth 2.0, pre-authorized code | Pre-authorized code with TX_CODE |
-| **Selective Disclosure** | SD-JWT-VC, mDoc | SD-JWT, BBS+ | Not natively supported |
-| **Post-Quantum Crypto** | No | Yes (CRYSTALS-DILITHIUM) | No |
-| **Revocation Support** | Status list (issuer-dependent) | Configurable | Yes (credential status management) |
-| **Regulatory Driver** | eIDAS 2.0 (EU mandate) | Standards-flexible (multi-jurisdiction) | Platform/ecosystem |
-| **Source Code Available** | Yes (open source) | Yes (open source) | No (public docs and API only) |
-| **Analysis Basis** | Source code + documentation | Source code + documentation | Public documentation only |
+| Dimension                 | EUDI Wallet                                                    | Procivis ONE                                 | Affinidi                                    |
+| ------------------------- | -------------------------------------------------------------- | -------------------------------------------- | ------------------------------------------- |
+| **Architecture**          | Native mobile (Android + iOS)                                  | Cross-platform (React Native + Rust core)    | Cloud service + holder vault                |
+| **Languages**             | Kotlin, Swift                                                  | TypeScript, Rust                             | Multi-language TDK (TS, Python, Java, etc.) |
+| **Core SDK**              | `eudi-lib-android-wallet-core` v0.23.0 / EudiWalletKit v0.19.4 | `@procivis/react-native-one-core` v1.81885.0 | Affinidi Credential Issuance Service        |
+| **OID4VCI Version**       | v1.0 (Final)                                                   | Draft 13, Final 1, HAIP, Swiyu               | Pre-authorized code flow                    |
+| **Credential Formats**    | mDoc, SD-JWT-VC                                                | W3C VC, SD-JWT, JSON-LD + BBS+, mDL          | W3C VC (JSON-LD)                            |
+| **Signature Algorithms**  | Platform-dependent (ES256, ES384)                              | ES256, EdDSA, BBS+, CRYSTALS-DILITHIUM       | EcdsaSecp256k1Signature2019                 |
+| **DID Methods**           | Multiple (issuer-dependent)                                    | Multiple (configurable)                      | `did:key`                                   |
+| **Key Storage**           | Android Keystore / Secure Enclave (hardware-only)              | Secure Element, Android Keystore, Ubiqu RSE  | Cloud-managed (Affinidi Vault)              |
+| **Transport**             | HTTP                                                           | HTTP, BLE, MQTT                              | HTTP                                        |
+| **Authorization**         | OAuth 2.0 with PAR, DPoP                                       | OAuth 2.0, pre-authorized code               | Pre-authorized code with TX_CODE            |
+| **Selective Disclosure**  | SD-JWT-VC, mDoc                                                | SD-JWT, BBS+                                 | Not natively supported                      |
+| **Post-Quantum Crypto**   | No                                                             | Yes (CRYSTALS-DILITHIUM)                     | No                                          |
+| **Revocation Support**    | Status list (issuer-dependent)                                 | Configurable                                 | Yes (credential status management)          |
+| **Regulatory Driver**     | eIDAS 2.0 (EU mandate)                                         | Standards-flexible (multi-jurisdiction)      | Platform/ecosystem                          |
+| **Source Code Available** | Yes (open source)                                              | Yes (open source)                            | No (public docs and API only)               |
+| **Analysis Basis**        | Source code + documentation                                    | Source code + documentation                  | Public documentation only                   |
 
 ---
 
