@@ -1,6 +1,6 @@
 # Section 11: Cryptography for Verification
 
-This section covers the cryptographic mechanisms specific to the verification/presentation flow. For foundational cryptography (algorithms, credential formats), see the [Issuance Cryptography section](../../docs/11-cryptography/).
+This section covers the cryptographic mechanisms specific to the verification/presentation flow. For foundational cryptography (algorithms, credential formats), see the [Issuance Cryptography section](../../issuance/11-cryptography/).
 
 ---
 
@@ -37,6 +37,6 @@ This section covers the cryptographic mechanisms specific to the verification/pr
 
 ## Relationship to Other Sections
 
-- **[../../docs/11-cryptography/](../../docs/11-cryptography/)**: Foundational algorithms and formats
+- **[../../issuance/11-cryptography/](../../issuance/11-cryptography/)**: Foundational algorithms and formats
 - **[07 Holder Binding](../07-holder-binding/)**: Proof-of-possession concepts
 - **[09 Verifier Validation](../09-verifier-validation/)**: How proofs are verified

@@ -30,4 +30,4 @@ This section covers how wallets match stored credentials against verifier requir
 - **[05 Presentation Definition](../05-presentation-definition/)**: Defines the requirements credentials must satisfy
 - **[07 Holder Binding](../07-holder-binding/)**: Key binding proofs after selection
 - **[08 Presentation Response](../08-presentation-response/)**: Selected credentials are assembled into VP
-- **[10 Secure Storage](../../docs/10-secure-storage/)**: Credentials are retrieved from secure storage
+- **[10 Secure Storage](../../issuance/10-secure-storage/)**: Credentials are retrieved from secure storage

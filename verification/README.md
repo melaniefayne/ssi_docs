@@ -19,7 +19,7 @@ After reading this documentation, your team will be able to:
 
 **In scope:** The complete credential verification and presentation flow — from presentation request to response validation.
 
-**Out of scope:** Credential issuance flows are documented separately in the [Issuance Documentation](../docs/).
+**Out of scope:** Credential issuance flows are documented separately in the [Issuance Documentation](../issuance/).
 
 ---
 
@@ -59,30 +59,30 @@ The protocols mirror each other:
 
 | # | Section | Description |
 |---|---------|-------------|
-| 00 | [Introduction](./00-introduction/) | What SSI verification is, trust models, how to navigate these docs |
-| 01 | [Architecture Overview](./01-architecture/) | High-level architecture of each wallet's verification pipeline |
+| 00 | [Introduction](./00-introduction/README.md) | What SSI verification is, trust models, how to navigate these docs |
+| 01 | [Architecture Overview](./01-architecture/README.md) | High-level architecture of each wallet's verification pipeline |
 
 ### Verification Flow (Step by Step)
 
 | # | Section | Description |
 |---|---------|-------------|
-| 02 | [Presentation Request](./02-presentation-request/) | QR codes, deep links, request resolution, transport mechanisms |
-| 03 | [Verifier Metadata](./03-verifier-metadata/) | Client metadata, trust establishment, verifier identification |
-| 04 | [Authorization Request](./04-authorization-request/) | OID4VP request structure, client_id schemes, response modes |
-| 05 | [Presentation Definition](./05-presentation-definition/) | PEX queries, DCQL, input descriptors, credential constraints |
-| 06 | [Credential Selection](./06-credential-selection/) | Holder-side matching, user consent, selective disclosure UI |
-| 07 | [Holder Binding](./07-holder-binding/) | Proof of possession, key binding, cryptographic proofs |
-| 08 | [Presentation Response](./08-presentation-response/) | VP Token construction, response transmission, redirect handling |
-| 09 | [Verifier Validation](./09-verifier-validation/) | Response verification, signature checks, revocation status |
-| 10 | [Transport Modes](./10-transport-modes/) | Remote (HTTPS), proximity (BLE/NFC), cross-device vs same-device |
+| 02 | [Presentation Request](./02-presentation-request/README.md) | QR codes, deep links, request resolution, transport mechanisms |
+| 03 | [Verifier Metadata](./03-verifier-metadata/README.md) | Client metadata, trust establishment, verifier identification |
+| 04 | [Authorization Request](./04-authorization-request/README.md) | OID4VP request structure, client_id schemes, response modes |
+| 05 | [Presentation Definition](./05-presentation-definition/README.md) | PEX queries, DCQL, input descriptors, credential constraints |
+| 06 | [Credential Selection](./06-credential-selection/README.md) | Holder-side matching, user consent, selective disclosure UI |
+| 07 | [Holder Binding](./07-holder-binding/README.md) | Proof of possession, key binding, cryptographic proofs |
+| 08 | [Presentation Response](./08-presentation-response/README.md) | VP Token construction, response transmission, redirect handling |
+| 09 | [Verifier Validation](./09-verifier-validation/README.md) | Response verification, signature checks, revocation status |
+| 10 | [Transport Modes](./10-transport-modes/README.md) | Remote (HTTPS), proximity (BLE/NFC), cross-device vs same-device |
 
 ### Deep Dives & Reference
 
 | # | Section | Description |
 |---|---------|-------------|
-| 11 | [Cryptography Deep Dive](./11-cryptography/) | Verification-specific cryptographic operations |
-| 12 | [Comparative Summary](./12-comparative-summary/) | Executive comparison, decision framework, feature matrices |
-| — | [Appendix](./appendix/) | Glossary, references, standards index |
+| 11 | [Cryptography Deep Dive](./11-cryptography/README.md) | Verification-specific cryptographic operations |
+| 12 | [Comparative Summary](./12-comparative-summary/README.md) | Executive comparison, decision framework, feature matrices |
+| — | [Appendix](./appendix/README.md) | Glossary, references, standards index |
 
 ---
 
@@ -90,11 +90,11 @@ The protocols mirror each other:
 
 **For a complete understanding:** Read sections 00 through 12 in order. Each section builds on the previous.
 
-**For quick architectural decisions:** Start with [01 Architecture](./01-architecture/) and [12 Comparative Summary](./12-comparative-summary/).
+**For quick architectural decisions:** Start with [01 Architecture](./01-architecture/README.md) and [12 Comparative Summary](./12-comparative-summary/README.md).
 
 **For a specific verification step:** Jump directly to the relevant section (02–10). Each is self-contained with its own conceptual overview.
 
-**For cryptographic details:** Section [11 Cryptography](./11-cryptography/) covers every mechanism referenced throughout the docs.
+**For cryptographic details:** Section [11 Cryptography](./11-cryptography/README.md) covers every mechanism referenced throughout the docs.
 
 ---
 

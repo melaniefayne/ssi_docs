@@ -155,7 +155,7 @@ Read these in order:
 
 ## Cross-References with Issuance Documentation
 
-Many verification concepts have direct parallels in the [Issuance Documentation](../../docs/):
+Many verification concepts have direct parallels in the [Issuance Documentation](../../issuance/):
 
 | Verification Concept | Issuance Parallel |
 |----------------------|-------------------|
